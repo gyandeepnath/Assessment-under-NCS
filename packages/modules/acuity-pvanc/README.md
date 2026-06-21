@@ -24,4 +24,6 @@ virtual observer. It implements the `ModulePlugin` contract from
 
 See `docs/architecture/ARCHITECTURE.md` §3 (module contract) and §10 (boundaries).
 
-> Status: skeleton. `src/module.def.ts` is a placeholder; no measurement logic yet.
+> Status: **v1 implemented** — hybrid staircase → QUEST+, §9 scoring, calibration + QC hooks,
+> trial logging, and measurement + reliability outputs. See `IMPLEMENTATION.md`; entry point
+> is `src/module.def.ts`. 36 module tests passing.
