@@ -95,7 +95,9 @@ export const pvancModule: ModulePlugin = {
 export { PvancSession } from './session/pvanc-session.ts';
 export type { PvancSessionConfig, PvancSessionResult, SessionStatus } from './session/pvanc-session.ts';
 export { makePvancResponder, referenceObserver } from './observer-model/observer.ts';
-export type { Responder, PvancObserverParams } from './observer-model/observer.ts';
+export type { Responder, ResponseDraw, PvancObserverParams } from './observer-model/observer.ts';
+export { ORIENTATIONS, wrongOrientation } from './stimulus/tumbling-e.ts';
+export type { Orientation } from './stimulus/tumbling-e.ts';
 export { PVANC_MANIFEST } from './manifest.ts';
 export {
   asScale,

@@ -33,7 +33,21 @@ real measurement path.
 - **Deterministic regression** — every run is a seeded, reproducible fixture; any change in
   engine/module output is caught in CI.
 
+## PVANC observer framework (`observers/pvanc-observers.ts`, `harness/pvanc-harness.ts`)
+
+Ten observer types — `ideal`, `noisy-attentive`, `random-guesser`, `fatigued`, `learning`,
+`low-vision`, `device-constraint`, `distance-error`, `brightness-variation`,
+`calibration-drift` — each carrying `expectedBehavior` / `expectedOutput` / `failureLooksLike`.
+Subject responses follow the psychometric in logMAR; environmental observers also vary the
+device/distance config, so error reaches the measurement as an **effective size** that differs
+from the nominal size the module assumes. The harness (`runScenario`, `runScenarioMany`) drives
+a real `PvancSession` and summarises outputs for assertion and reporting.
+
+- Tests: `observers/pvanc-observers.test.ts` (positive controls **and** negative cases).
+- Report: `docs/validation/PVANC-SIMULATION-REPORT.md` (behaviour + weaknesses uncovered).
+
 ## Dependencies
 
-`@vision-platform/core-contracts`, plus the engine and modules under test (as dev/test wiring).
-Never a dependency of any shipped package.
+`@vision-platform/core-contracts`, `@vision-platform/core-engine`,
+`@vision-platform/calibration-engine` (to model device limits), and the module under test
+(`@vision-platform/module-acuity-pvanc`). Dev/test only — never a dependency of any shipped package.
