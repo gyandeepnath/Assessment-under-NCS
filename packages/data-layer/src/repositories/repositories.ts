@@ -1,0 +1,7 @@
+/**
+ * Repository implementations over adapters
+ *
+ * Skeleton placeholder — see docs/architecture/ARCHITECTURE.md §7.
+ * No implementation yet. This file marks the component boundary only.
+ */
+export {};

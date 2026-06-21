@@ -1,0 +1,6 @@
+{
+  "name": "@vision-platform/module-near-acuity",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module plug-in: Near visual acuity. Skeleton — no implementation yet."
+}

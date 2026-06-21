@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+.pnp.*
+
+# build output
+dist/
+build/
+*.tsbuildinfo
+
+# logs & local env
+*.log
+.env
+.env.local
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# generated validation/simulation artefacts (keep reports/ tracked dir, ignore large outputs)
+packages/validation/reports/*.tmp

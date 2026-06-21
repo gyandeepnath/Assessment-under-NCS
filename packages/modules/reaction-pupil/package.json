@@ -1,0 +1,6 @@
+{
+  "name": "@vision-platform/module-reaction-pupil",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module plug-in: Pupil-response & reaction-time tasks. Skeleton — no implementation yet."
+}

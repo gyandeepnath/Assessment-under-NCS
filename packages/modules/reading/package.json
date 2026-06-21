@@ -1,0 +1,6 @@
+{
+  "name": "@vision-platform/module-reading",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module plug-in: Reading acuity & reading speed. Skeleton — no implementation yet."
+}

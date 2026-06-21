@@ -1,0 +1,17 @@
+{
+  "name": "vision-platform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Modular psychophysics-based vision assessment platform (skeleton).",
+  "workspaces": [
+    "packages/core-contracts",
+    "packages/core-engine",
+    "packages/calibration-engine",
+    "packages/quality-engine",
+    "packages/data-layer",
+    "packages/simulation",
+    "packages/validation",
+    "packages/modules/*",
+    "apps/*"
+  ]
+}

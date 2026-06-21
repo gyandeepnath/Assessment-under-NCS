@@ -1,0 +1,6 @@
+{
+  "name": "@vision-platform/module-acuity-pvanc",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module plug-in: Presenting visual acuity (non-clinical conditions). Skeleton — no implementation yet."
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@vision-platform/module-suppression-rivalry",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module plug-in: Interocular suppression / binocular rivalry. Skeleton — no implementation yet."
+}

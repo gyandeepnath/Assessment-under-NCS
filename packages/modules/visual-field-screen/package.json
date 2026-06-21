@@ -1,0 +1,6 @@
+{
+  "name": "@vision-platform/module-visual-field-screen",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Module plug-in: Visual field screening. Skeleton — no implementation yet."
+}
