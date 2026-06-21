@@ -79,9 +79,10 @@ test('logs every trial with full provenance, and the raw export round-trips', ()
     assert.ok(t.calibrationProfileId.length > 0);
     assert.ok(['phase1_bracketing', 'phase2_bayesian'].includes(t.phase));
   }
-  const parsed = JSON.parse(r.exportJson!);
+  const parsed = JSON.parse(r.exportJson);
   assert.equal(parsed.trials.length, r.trials.length);
-  assert.equal(parsed.session.moduleId, 'acuity-pvanc');
+  assert.equal(parsed.trialCount, r.trials.length);
+  assert.equal(parsed.versions.moduleId, 'acuity-pvanc');
 });
 
 test('is fully deterministic for a fixed seed', () => {
@@ -91,6 +92,56 @@ test('is fully deterministic for a fixed seed', () => {
   assert.equal(a.result!.estimate as unknown as number, b.result!.estimate as unknown as number);
   assert.equal(a.trials.length, b.trials.length);
   assert.equal(a.exportJson, b.exportJson);
+});
+
+test('structured export carries all seven facets with real session data', () => {
+  const session = new PvancSession(baseConfig({ userPseudonymId: 'user-1' }));
+  const r = session.run(makePvancResponder({ trueLogMAR: 0.3 }, createRng('obs')));
+  const doc = r.export;
+
+  // version metadata
+  assert.equal(doc.versions.moduleId, 'acuity-pvanc');
+  assert.equal(doc.versions.specVersion, 'PVANC-1.0');
+  assert.equal(doc.versions.dataSchemaVersion, '1');
+  assert.ok(doc.versions.exportSchemaVersion);
+
+  // session summary + measurement result
+  assert.equal(doc.session.userPseudonymId, 'user-1');
+  assert.equal(doc.session.status, 'completed');
+  assert.equal(doc.session.result!.scale, 'logMAR');
+
+  // reliability/confidence
+  assert.equal(doc.reliability!.quality.band, r.quality!.band);
+  assert.equal(doc.reliability!.trialCounts.total, r.trials.length);
+  assert.ok(doc.reliability!.trialCounts.validPhase2 >= 15);
+
+  // device metadata (resolved profile + raw signals)
+  assert.equal(doc.device.profile.deviceModel, 'iPhone16,1');
+  assert.equal(doc.device.signals.deviceClass, 'smartphone');
+  assert.equal(doc.device.profileSource, 'database');
+
+  // calibration + environment + QC metadata
+  assert.equal(doc.calibration.viewingDistance.method, 'cord-measured');
+  assert.equal(doc.environment.ambientLux, 300);
+  assert.equal(doc.qc.blocked, false);
+  assert.equal(doc.qc.completeness.complete, true);
+
+  // raw trial-level data is present in full, and the CSV matches
+  assert.equal(doc.trialCount, doc.trials.length);
+  assert.equal(r.trialsCsv.trim().split('\n').length, doc.trials.length + 1);
+});
+
+test('blocked sessions still export device/QC metadata with no measurement', () => {
+  const r = new PvancSession(baseConfig({ deviceSignals: phoneSignals({ darkMode: 'on' }) })).run(
+    makePvancResponder({ trueLogMAR: 0.2 }, createRng('o')),
+  );
+  assert.equal(r.export.session.status, 'blocked');
+  assert.equal(r.export.session.result, null);
+  assert.equal(r.export.reliability, null);
+  assert.equal(r.export.qc.blocked, true);
+  assert.match(r.export.qc.blockReason ?? '', /dark mode/);
+  assert.equal(r.export.device.signals.darkMode, 'on'); // device metadata preserved
+  assert.equal(r.export.trialCount, 0);
 });
 
 // --- Edge cases -----------------------------------------------------------

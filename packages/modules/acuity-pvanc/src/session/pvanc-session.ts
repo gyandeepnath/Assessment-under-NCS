@@ -28,6 +28,8 @@ import {
   adequacy,
   captureEnvironment,
   pixelsPerDegree,
+  type ResolvedDeviceProfile,
+  type EnvironmentSnapshot,
 } from '@vision-platform/calibration-engine';
 import {
   QualityHookRegistry,
@@ -43,7 +45,11 @@ import {
   checkCompleteness,
   type PreflightEnv,
 } from '@vision-platform/quality-engine';
-import { buildExportBundle, serialize } from '@vision-platform/data-layer';
+import {
+  buildSessionExport,
+  exportToJson,
+  exportTrialsToCsv,
+} from '@vision-platform/data-layer';
 import type {
   DeviceSignals,
   DistanceMethod,
@@ -57,10 +63,17 @@ import type {
   QualityEvent,
   QualityFlag,
   CalibrationProfile,
-  SessionRecord,
   PermittedOutput,
   Millis,
   Candela,
+  SessionExport,
+  SessionSummary,
+  ReliabilityOutput,
+  DeviceMetadata,
+  EnvironmentMetadata,
+  QcMetadata,
+  TrialCounts,
+  VersionMetadata,
 } from '@vision-platform/core-contracts';
 
 import { buildTumblingE, strokeArcmin } from '../stimulus/tumbling-e.ts';
@@ -95,9 +108,13 @@ export interface PvancSessionResult {
   quality: QualityScore | null;
   permittedOutput: PermittedOutput;
   calibrationProfile: CalibrationProfile;
-  session: SessionRecord | null;
   trials: readonly TrialRecord[];
-  exportJson: string | null;
+  /** The structured data-output document (the seven-facet session export). */
+  export: SessionExport;
+  /** Canonical JSON serialisation of `export`. */
+  exportJson: string;
+  /** Raw trial-level CSV (one row per trial). */
+  trialsCsv: string;
 }
 
 const FLOOR_CONSECUTIVE_ERRORS = 5; // PVANC §6.2 floor detection
@@ -110,6 +127,11 @@ export class PvancSession {
   private readonly timer: StimulusTimer;
   private nowMs = 0;
   private trialNumber = 0;
+  // Captured during run() so the export can report device/environment/QC metadata
+  // without recomputation (and without overwriting what was actually used).
+  private resolvedDevice!: ResolvedDeviceProfile;
+  private environment!: EnvironmentSnapshot;
+  private preflightFlags: QualityFlag[] = [];
 
   constructor(cfg: PvancSessionConfig) {
     this.cfg = cfg;
@@ -121,7 +143,8 @@ export class PvancSession {
   }
 
   run(responder: Responder): PvancSessionResult {
-    const env = captureEnvironment(this.cfg.deviceSignals);
+    this.environment = captureEnvironment(this.cfg.deviceSignals);
+    const env = this.environment;
     const calibration = this.buildCalibration();
 
     // --- Eligibility (may block) ---
@@ -152,6 +175,7 @@ export class PvancSession {
     if (preflight.blocked) {
       return this.blocked(`pre-flight: ${preflight.blockReasons.join('; ')}`, calibration);
     }
+    this.preflightFlags = [...preflight.flags];
     const flags: QualityFlag[] = [...preflight.flags];
 
     // --- Phase 1: staircase bracketing ---
@@ -373,6 +397,7 @@ export class PvancSession {
 
   private buildCalibration(): CalibrationProfile {
     const deviceProfile = resolveDeviceProfile(this.cfg.deviceSignals);
+    this.resolvedDevice = deviceProfile;
     const viewingDistance = acquireDistance(this.cfg.distance.method, this.cfg.distance.valueMetres);
 
     // Adequacy is judged against the finest stroke we intend to measure (best acuity).
@@ -437,8 +462,8 @@ export class PvancSession {
       phase2Trials: args.phase2Valid.length,
       outlierFraction: args.outlierFraction,
       distanceMethod: calibration.viewingDistance.method,
-      ambientAvailable: captureEnvironment(this.cfg.deviceSignals).ambientAvailable,
-      ambientLux: captureEnvironment(this.cfg.deviceSignals).ambientLux,
+      ambientAvailable: this.environment.ambientAvailable,
+      ambientLux: this.environment.ambientLux,
     });
     const quality = scoreQuality(PVANC_QUALITY_MODEL, evidence, {
       flags,
@@ -449,22 +474,40 @@ export class PvancSession {
       ? 'retake'
       : claimGate.permit(quality.band, PVANC_MANIFEST.validationStatus);
 
-    const trials = this.log.all() as readonly TrialRecord[];
-    const session: SessionRecord = {
+    const trials = this.log.all() as TrialRecord[];
+    const counts = this.trialCounts(trials);
+    const reliability: ReliabilityOutput = { quality, permittedOutput, trialCounts: counts };
+
+    const summary: SessionSummary = {
       sessionId: this.cfg.sessionId,
       userPseudonymId: this.cfg.userPseudonymId ?? 'anonymous',
-      moduleId: PVANC_MANIFEST.moduleId,
-      moduleVersion: PVANC_MANIFEST.moduleVersion,
-      specVersion: PVANC_MANIFEST.specVersion,
-      schemaVersion: '1',
       startedAt: this.cfg.deviceSignals.capturedAt,
-      calibrationProfile: calibration,
-      procedureConfig: { procedureId: 'pvanc-hybrid', useCase: this.cfg.useCase ?? 'screening' },
+      status,
+      ...(args.reason ? { reason: args.reason } : {}),
+      useCase: this.cfg.useCase ?? 'screening',
+      procedureId: 'pvanc-hybrid',
       result,
-      quality,
     };
 
-    const exportJson = serialize(buildExportBundle(session, trials, calibration, 'json'));
+    const qc: QcMetadata = {
+      blocked: false,
+      completeness: { complete: status === 'completed', ...(args.reason ? { reason: args.reason } : {}) },
+      preflightFlags: this.preflightFlags,
+      events: trials.flatMap((t) => t.qualityEvents),
+      flagCounts: tallyFlags(quality.flags),
+    };
+
+    const doc = buildSessionExport({
+      generatedAt: this.cfg.deviceSignals.capturedAt,
+      versions: this.versionMetadata(),
+      session: summary,
+      reliability,
+      device: this.deviceMetadata(),
+      calibration,
+      environment: this.environmentMetadata(),
+      qc,
+      trials,
+    });
 
     return {
       status,
@@ -473,13 +516,45 @@ export class PvancSession {
       quality,
       permittedOutput,
       calibrationProfile: calibration,
-      session,
       trials,
-      exportJson,
+      export: doc,
+      exportJson: exportToJson(doc),
+      trialsCsv: exportTrialsToCsv(trials),
     };
   }
 
   private blocked(reason: string, calibration: CalibrationProfile): PvancSessionResult {
+    const trials = this.log.all() as TrialRecord[];
+    const summary: SessionSummary = {
+      sessionId: this.cfg.sessionId,
+      userPseudonymId: this.cfg.userPseudonymId ?? 'anonymous',
+      startedAt: this.cfg.deviceSignals.capturedAt,
+      status: 'blocked',
+      reason,
+      useCase: this.cfg.useCase ?? 'screening',
+      procedureId: 'pvanc-hybrid',
+      result: null,
+    };
+    const qc: QcMetadata = {
+      blocked: true,
+      blockReason: reason,
+      completeness: { complete: false, reason },
+      preflightFlags: this.preflightFlags,
+      events: trials.flatMap((t) => t.qualityEvents),
+      flagCounts: {},
+    };
+    const doc = buildSessionExport({
+      generatedAt: this.cfg.deviceSignals.capturedAt,
+      versions: this.versionMetadata(),
+      session: summary,
+      reliability: null,
+      device: this.deviceMetadata(),
+      calibration,
+      environment: this.environmentMetadata(),
+      qc,
+      trials,
+    });
+
     return {
       status: 'blocked',
       reason,
@@ -487,10 +562,43 @@ export class PvancSession {
       quality: null,
       permittedOutput: 'retake',
       calibrationProfile: calibration,
-      session: null,
-      trials: this.log.all() as readonly TrialRecord[],
-      exportJson: null,
+      trials,
+      export: doc,
+      exportJson: exportToJson(doc),
+      trialsCsv: exportTrialsToCsv(trials),
     };
+  }
+
+  // --- Metadata assembly ----------------------------------------------------
+
+  private versionMetadata(): Omit<VersionMetadata, 'exportSchemaVersion'> {
+    return {
+      moduleId: PVANC_MANIFEST.moduleId,
+      moduleVersion: PVANC_MANIFEST.moduleVersion,
+      specVersion: PVANC_MANIFEST.specVersion,
+      dataSchemaVersion: '1',
+      engineContractVersion: PVANC_MANIFEST.engineApiRange,
+    };
+  }
+
+  private deviceMetadata(): DeviceMetadata {
+    return {
+      profile: this.resolvedDevice,
+      signals: this.cfg.deviceSignals,
+      profileSource: this.resolvedDevice.source,
+    };
+  }
+
+  private environmentMetadata(): EnvironmentMetadata {
+    return this.environment;
+  }
+
+  private trialCounts(trials: readonly TrialRecord[]): TrialCounts {
+    const phase1 = trials.filter((t) => t.phase === 'phase1_bracketing').length;
+    const phase2Trials = trials.filter((t) => t.phase === 'phase2_bayesian');
+    const validPhase2 = phase2Trials.filter((t) => t.outcome.usableForThreshold).length;
+    const outliers = trials.filter((t) => t.qualityEvents.length > 0).length;
+    return { total: trials.length, phase1, phase2: phase2Trials.length, validPhase2, outliers };
   }
 }
 
@@ -514,6 +622,12 @@ interface PresentedTrial {
 function expectedMeanOpt(age: number | undefined): { expectedMeanLogMAR?: number } {
   const exp = expectedMeanLogMAR(age);
   return exp !== undefined ? { expectedMeanLogMAR: exp } : {};
+}
+
+function tallyFlags(flags: readonly QualityFlag[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const f of flags) counts[f.code] = (counts[f.code] ?? 0) + 1;
+  return counts;
 }
 
 function gaussianPrior(mean: number, sd: number): (x: number) => number {

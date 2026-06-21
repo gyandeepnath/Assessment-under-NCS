@@ -28,7 +28,14 @@ Supporting stores: **calibration profiles** (`CalibrationRepository`) and **expo
 | `adapters/postgres-supabase/` | Server-side longitudinal store, clinician access, research aggregates. |
 | `schema/` | Versioned data-model definitions (the source of `schemaVersion`). |
 | `migrations/` | Forward-only migrations. Never rewrite raw trials' scientific content — structural/storage concerns only. |
-| `export/` | The **exportable raw data** service: a self-describing bundle (every `TrialRecord` + `SessionRecord` + `CalibrationProfile` + manifest versions + quality report + limitations) in JSON (canonical) and CSV (flattened trial table), sufficient to recompute the result off-device. |
+| `export/` | The **exportable raw data** service. Two layers: (1) `export-bundle` — a minimal generic bundle (trials + session + calibration); (2) `export-document` — the **structured, versioned session export** (`SessionExport`, schema `EXPORT_SCHEMA_VERSION`) that keeps the seven facets as distinct top-level sections (raw trials, session summary, reliability/confidence, calibration, QC, device, version metadata). Serialisers: `exportToJson` (canonical, key-sorted, lossless), `exportTrialsToCsv` (raw one-row-per-trial with provenance + posterior state), `exportSessionRowCsv` (one-row-per-session for validation tables). |
+
+### Structured session export — invariants
+
+- **Raw data is never hidden:** every `TrialRecord` is included in full; `trialCount` must equal `trials.length`.
+- **Metadata is never silently overwritten:** `buildSessionExport` validates that every trial's `moduleId`/`moduleVersion`/`specVersion`/`schemaVersion` agrees with the export's version metadata and **throws** on conflict rather than papering over it.
+- **Deterministic & lossless:** JSON serialisation is key-sorted and stable for reproducible diffs and re-derivation off-device.
+- Sections: `versions`, `session`, `reliability`, `device`, `calibration`, `environment`, `qc`, `trials` (types in `core-contracts/storage.contract`).
 
 ## Privacy & retention (policy at the adapter boundary, not in the engine)
 

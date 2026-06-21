@@ -11,10 +11,10 @@
  */
 
 import type { UUID, SemVer, ISO8601 } from './units.ts';
-import type { StimulusSpec, TrialOutcome, ModuleResult, ChangeAssessment } from './module.contract.ts';
-import type { ResponseEvent } from './platform.contract.ts';
-import type { CalibrationProfile } from './calibration.contract.ts';
-import type { QualityScore, QualityEvent } from './quality.contract.ts';
+import type { StimulusSpec, TrialOutcome, ModuleResult, ChangeAssessment, UseCase } from './module.contract.ts';
+import type { ResponseEvent, DeviceSignals } from './platform.contract.ts';
+import type { CalibrationProfile, DeviceProfile } from './calibration.contract.ts';
+import type { QualityScore, QualityEvent, QualityFlag, PermittedOutput } from './quality.contract.ts';
 
 export type SchemaVersion = string;
 
@@ -96,4 +96,99 @@ export interface ExportBundle {
   trials: TrialRecord[];
   calibration: CalibrationProfile;
   format: 'json' | 'csv';
+}
+
+// ---------------------------------------------------------------------------
+// Structured session export (the module data-output layer).
+//
+// A single, versioned document that keeps the seven required facets as DISTINCT
+// top-level sections so nothing is hidden or overwritten: raw trials, session
+// summary, reliability/confidence, calibration, QC, device, and version
+// metadata. Designed to be lossless and directly usable in validation studies.
+// See docs/architecture/ARCHITECTURE.md §7.3.
+// ---------------------------------------------------------------------------
+
+/** Version provenance — never silently overwritten; trials must agree with it. */
+export interface VersionMetadata {
+  moduleId: string;
+  moduleVersion: SemVer;
+  specVersion: string;
+  dataSchemaVersion: SchemaVersion;
+  exportSchemaVersion: string;
+  engineContractVersion?: SemVer;
+}
+
+export interface TrialCounts {
+  total: number;
+  phase1: number;
+  phase2: number;
+  validPhase2: number;
+  outliers: number;
+}
+
+/** Confidence/reliability output. */
+export interface ReliabilityOutput {
+  quality: QualityScore;
+  permittedOutput: PermittedOutput;
+  trialCounts: TrialCounts;
+}
+
+/** Session summary (identifiers, status, and the measurement result). */
+export interface SessionSummary {
+  sessionId: UUID;
+  userPseudonymId: string;
+  startedAt: ISO8601;
+  status: 'completed' | 'inconclusive' | 'blocked';
+  reason?: string;
+  useCase: UseCase;
+  procedureId: string;
+  result: ModuleResult | null;
+}
+
+/** Device metadata: the resolved profile plus the raw signals as reported. */
+export interface DeviceMetadata {
+  profile: DeviceProfile;
+  signals: DeviceSignals;
+  profileSource?: string;
+}
+
+/** Environment metadata captured at session time. */
+export interface EnvironmentMetadata {
+  ambientLux: number | null;
+  ambientAvailable: boolean;
+  brightnessSetting: number | null;
+  autoBrightness: 'on' | 'off' | 'unknown';
+  darkMode: 'on' | 'off' | 'unknown';
+  colourFilter: 'on' | 'off' | 'unknown';
+  orientation: 'portrait' | 'landscape' | 'unknown';
+  batteryLevel: number | null;
+  capturedAt: ISO8601;
+}
+
+/** Quality-control metadata: gates, flags, and events (raw, not summarised away). */
+export interface QcMetadata {
+  blocked: boolean;
+  blockReason?: string;
+  completeness: { complete: boolean; reason?: string };
+  preflightFlags: QualityFlag[];
+  events: QualityEvent[];
+  flagCounts: Record<string, number>;
+}
+
+/** The structured session export document. */
+export interface SessionExport {
+  kind: 'vision-assessment-session-export';
+  exportSchemaVersion: string;
+  generatedAt: ISO8601;
+  versions: VersionMetadata;
+  session: SessionSummary;
+  reliability: ReliabilityOutput | null;
+  device: DeviceMetadata;
+  calibration: CalibrationProfile;
+  environment: EnvironmentMetadata;
+  qc: QcMetadata;
+  /** Integrity: must equal trials.length. */
+  trialCount: number;
+  /** Raw trial-level data — always included in full. */
+  trials: TrialRecord[];
 }

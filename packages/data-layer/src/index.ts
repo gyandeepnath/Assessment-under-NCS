@@ -7,3 +7,11 @@
  */
 
 export { buildExportBundle, toJson, toCsv, serialize } from './export/export-bundle.ts';
+export {
+  EXPORT_SCHEMA_VERSION,
+  buildSessionExport,
+  exportToJson,
+  exportTrialsToCsv,
+  exportSessionRowCsv,
+  type BuildSessionExportInput,
+} from './export/export-document.ts';
