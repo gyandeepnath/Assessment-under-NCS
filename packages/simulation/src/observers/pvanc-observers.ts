@@ -214,12 +214,15 @@ export const SCENARIOS: ObserverScenario[] = [
   {
     id: 'distance-error',
     name: '8. Distance-error observer',
-    expectedBehavior: 'Module assumes 2 m (cord-measured, high confidence) but the subject sits at 1.5 m, so optotypes appear larger/easier.',
-    expectedOutput: 'A BIASED (better-than-true) estimate; ideally some signal of uncertainty.',
-    failureLooksLike: 'Confident, unflagged bias — the module trusts a wrong distance (a real platform weakness).',
+    expectedBehavior: 'Module is told 2 m (cord-measured) but the subject sits at 1.5 m, so optotypes appear larger/easier. A camera corroboration reads the true 1.5 m.',
+    expectedOutput: 'The estimate is still biased (better-than-true), BUT the corroboration disagreement is detected: distance-stability quality drops, confidence falls, a disagreement flag fires, and the result is no longer presented confidently (→ retake).',
+    failureLooksLike: 'Confident, unflagged bias with distance quality still at 100 (the pre-fix W2 behaviour).',
     groundTruthLogMAR: 0.3,
     // Module is TOLD 2 m; subject is actually at 1.5 m → effective size shift = log10(2/1.5).
-    configOverrides: { distance: { method: 'cord-measured', valueMetres: 2 } },
+    // A camera reading corroborates the real 1.5 m, exposing the wrong primary distance.
+    configOverrides: {
+      distance: { method: 'cord-measured', valueMetres: 2, corroboration: { method: 'camera-estimated', valueMetres: 1.5 } },
+    },
     makeResponder: (rng) =>
       makeResponder(
         {

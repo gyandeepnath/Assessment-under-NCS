@@ -91,7 +91,12 @@ export interface PvancSessionConfig {
   userPseudonymId?: string;
   seed: string;
   deviceSignals: DeviceSignals;
-  distance: { method: DistanceMethod; valueMetres: number };
+  distance: {
+    method: DistanceMethod;
+    valueMetres: number;
+    /** Optional independent second reading to corroborate the primary distance. */
+    corroboration?: { method: DistanceMethod; valueMetres: number };
+  };
   age?: number;
   useCase?: UseCase;
   maxPhase1Trials?: number;
@@ -175,8 +180,10 @@ export class PvancSession {
     if (preflight.blocked) {
       return this.blocked(`pre-flight: ${preflight.blockReasons.join('; ')}`, calibration);
     }
-    this.preflightFlags = [...preflight.flags];
-    const flags: QualityFlag[] = [...preflight.flags];
+    // Distance corroboration QC: surface a disagreeing or uncorroborated distance
+    // so a wrong-but-confident distance is no longer silently trusted (W2).
+    this.preflightFlags = [...preflight.flags, ...this.distanceFlags(calibration)];
+    const flags: QualityFlag[] = [...this.preflightFlags];
 
     // --- Phase 1: staircase bracketing ---
     const bracket = this.runPhase1(responder, calibration.profileId, flags);
@@ -398,7 +405,16 @@ export class PvancSession {
   private buildCalibration(): CalibrationProfile {
     const deviceProfile = resolveDeviceProfile(this.cfg.deviceSignals);
     this.resolvedDevice = deviceProfile;
-    const viewingDistance = acquireDistance(this.cfg.distance.method, this.cfg.distance.valueMetres);
+    const viewingDistance = acquireDistance(this.cfg.distance.method, this.cfg.distance.valueMetres, {
+      ...(this.cfg.distance.corroboration
+        ? {
+            corroboration: {
+              valueMetres: this.cfg.distance.corroboration.valueMetres,
+              method: this.cfg.distance.corroboration.method,
+            },
+          }
+        : {}),
+    });
 
     // Adequacy is judged against the finest stroke we intend to measure (best acuity).
     const report = adequacy({
@@ -461,7 +477,7 @@ export class PvancSession {
       posteriorSd: args.posteriorSd,
       phase2Trials: args.phase2Valid.length,
       outlierFraction: args.outlierFraction,
-      distanceMethod: calibration.viewingDistance.method,
+      distanceConfidence: distanceConfidence(calibration.viewingDistance),
       ambientAvailable: this.environment.ambientAvailable,
       ambientLux: this.environment.ambientLux,
     });
@@ -591,6 +607,30 @@ export class PvancSession {
 
   private environmentMetadata(): EnvironmentMetadata {
     return this.environment;
+  }
+
+  /** QC flags for the viewing distance (W2: never silently trust the distance). */
+  private distanceFlags(calibration: CalibrationProfile): QualityFlag[] {
+    const vd = calibration.viewingDistance;
+    if (vd.corroboration && !vd.corroboration.agrees) {
+      return [
+        {
+          code: 'distance-corroboration-disagreement',
+          severity: 'degrade',
+          message: `declared ${vd.value} m disagrees with corroborating ${vd.corroboration.value} m by ${vd.corroboration.disagreementM.toFixed(2)} m; estimate may be biased`,
+        },
+      ];
+    }
+    if (!vd.corroboration) {
+      return [
+        {
+          code: 'distance-uncorroborated',
+          severity: 'info',
+          message: 'viewing distance taken on trust (no independent corroboration); a ~10% distance error shifts the result by ~0.04 logMAR',
+        },
+      ];
+    }
+    return [];
   }
 
   private trialCounts(trials: readonly TrialRecord[]): TrialCounts {

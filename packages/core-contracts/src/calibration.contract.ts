@@ -30,10 +30,25 @@ export type DistanceMethod =
   | 'user-reported'
   | 'unknown';
 
+/**
+ * An independent second reading of the viewing distance (e.g. camera vs cord),
+ * used to corroborate the primary. Disagreement widens uncertainty and lowers
+ * confidence rather than being silently trusted (catches a wrong-but-confident
+ * primary distance).
+ */
+export interface DistanceCorroboration {
+  value: Metres;
+  method: DistanceMethod;
+  disagreementM: Metres;
+  agrees: boolean;
+}
+
 export interface DistanceEstimate {
   value: Metres;
   method: DistanceMethod;
   uncertainty: Metres;
+  /** Present when a second, independent distance reading was supplied. */
+  corroboration?: DistanceCorroboration;
 }
 
 export interface DeviceProfile {

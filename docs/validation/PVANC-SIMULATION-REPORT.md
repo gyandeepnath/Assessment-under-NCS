@@ -21,7 +21,7 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 | 5 | Learning (0.4 → 0.2) | 38 completed | 0.25 | −0.05* | 0.14 | 70 | in-bracket |
 | 6 | Low-vision (true 0.8) | 32 completed | 0.74 | −0.06 | 0.11 | 68 | below-expected |
 | 7 | Device-constraint (coarse @0.4 m) | 40 completed | 0.55 | n/a | — | 70 | **adequacy fail, cap 70** |
-| 8 | Distance-error (1.5 m vs 2 m) | 39 completed | 0.14 | **−0.16** | 0.21 | 70 | distance Q = 100 |
+| 8 | Distance-error (1.5 m vs 2 m, corroborated) | 39 completed | 0.14 | **−0.16** | 0.21 | 55 | **distance Q → 0, retake, flagged** |
 | 9 | Brightness-variation (auto-bright) | 38 completed | 0.36 | +0.06 | 0.14 | 70 | auto-brightness flag |
 | 10 | Calibration-drift (silent) | 39 completed | 0.32 | +0.02 | 0.13 | 70 | no signal |
 
@@ -36,7 +36,7 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 5. **Learning-effect** — *Expected:* estimate between the early/late thresholds. *Output:* mean 0.25 ∈ [0.2, 0.4]. *Failure:* outside the bracket / instability — not seen. **Verdict: PASS** (and the spec's practice-trial / 2nd-session-baseline guidance applies).
 6. **Low-vision** — *Expected:* reduced acuity, below-expected. *Output:* mean 0.74, **every** completed run below-expected. *Failure:* a within-expected false negative — **never occurred**. **Verdict: PASS** (the safety-critical case).
 7. **Device-constraint** — *Expected:* device-limited result, flagged. *Output:* **adequacy fails, quality capped at 70**, estimate pinned near the device floor (~0.55). *Failure:* adequacy passes / impossibly-good acuity — not seen. **Verdict: PASS, but see W4** (the point estimate alone looks like reduced *eye* acuity; the cap + `maxMeasurable` metadata are what disambiguate it).
-8. **Distance-error** — *Expected:* a bias, ideally signalled. *Output:* **confident −0.16 bias** with distance-stability quality still at **100**. *Failure (as defined): confident, unflagged bias — THIS OCCURRED.** **Verdict: WEAKNESS confirmed (W2).**
+8. **Distance-error** — *Expected:* a bias, signalled. *Output:* the −0.16 bias remains (a wrong-distance render cannot be un-biased), **but it is no longer confident**: with a corroborating reading the disagreement is detected — distance-stability quality collapses to 0, a `distance-corroboration-disagreement` flag fires, and the result drops to **retake**. *Failure:* confident unflagged bias — **no longer occurs**. **Verdict: WEAKNESS FIXED (W2 — see below).**
 9. **Brightness-variation** — *Expected:* small worse bias + a flag. *Output:* bias +0.06 **and** an `auto-brightness` flag on every run. *Failure:* no flag / large bias — not seen. **Verdict: PASS**.
 10. **Calibration-drift** — *Expected:* small bias, undetectable in one session. *Output:* bias +0.02, no in-session signal. *Failure:* large bias or over-claiming detection — not seen. **Verdict: PASS as a documented limitation (W3).**
 
@@ -52,7 +52,12 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 ## Weaknesses uncovered
 
 - **W1 — Steep-slope negative bias (spec-driven).** For atypically steep observers (slope ≥ 4) the posterior-mean threshold is biased low (~0.10–0.15 logMAR). Isolated to the core: slope 2 @ threshold 0.0 → bias −0.007; slope 4 @ 0.0 → −0.146. Cause: the spec's slope prior (mean 2.0, SD 0.5; §6.2) plus the slope grid cap (4) resist steep slopes, shifting the threshold. Real human acuity slopes are ~1.5–3, where the module is unbiased, so impact in practice is small. **Not patched** (would require changing the spec). Future option: report the posterior **mode** alongside the mean, or widen the slope grid — to be evaluated against the spec.
-- **W2 — A wrong-but-confident viewing distance is undetectable.** The distance-error observer yields a confident −0.16 logMAR bias while the distance-stability quality component stays at 100, because the method was declared `cord-measured`. The platform trusts the declared distance and method absolutely. **Mitigations:** corroborate distance (e.g. camera cross-check), cap confidence for any single uncorroborated measurement, or surface a sensitivity note ("a 25% distance error ≈ 0.12 logMAR"). This is the single most consequential weakness for unsupervised use.
+- **W2 — A wrong-but-confident viewing distance — FIXED.** *Original:* a wrong distance produced a confident −0.16 logMAR bias while distance-stability quality stayed at 100, because the method was declared `cord-measured`. *Fix (spec-compliant — the spec already anticipates camera distance corroboration in §10.2/§11.1 and defines the distance component as "confirmed stable" in §9.3):*
+  1. **Distance corroboration** in the calibration engine: an optional independent second reading is compared to the primary; disagreement beyond tolerance **widens the uncertainty to the disagreement** and records it, so it can no longer be silently trusted.
+  2. The PVANC **distance-stability quality component is now driven by distance *confidence*** (which incorporates the widened uncertainty), not the raw declared method — so a disagreeing distance collapses the component to 0, dropping the result to *retake*.
+  3. A **`distance-corroboration-disagreement`** QC flag fires on disagreement, and an **`distance-uncorroborated`** info flag is attached whenever no second reading exists (the trust is now explicit, with a sensitivity note: ~10% distance error ≈ 0.04 logMAR).
+
+  *Result:* the simulation's distance-error observer now collapses distance quality to 0 and is sent to retake (was: confident, Q 100). **Residual limitation:** without a second reading the bias is still fundamentally unmeasurable — but it is no longer *unflagged* (the uncorroborated info flag makes the latent risk visible). Covered by tests in `pvanc-observers.test.ts` (#8) and `calibration.test.ts`.
 - **W3 — Single-session calibration drift is invisible.** By design (PVANC §10.4 puts drift detection in cross-session tracking, which v1 does not implement), a silently aged display produces a small undetected bias. Correctly **not** over-claimed; flagged here as a known gap until longitudinal tracking lands.
 - **W4 — Device-limited results can read like reduced eye acuity.** On an inadequate device the point estimate (~0.55) looks like below-expected vision; only the adequacy **cap (70)** and the `maxMeasurable` calibration metadata reveal it is the *device*, not the eye. Consumers/clinicians must read the calibration/QC metadata, not the estimate alone — the structured export (W: ensure it surfaces) makes this possible.
 - **W5 — No explicit non-compliance/guessing detector.** Guessing and fatigue are caught **indirectly** via the floor and completeness gates (which works well here), but there is no first-class "below-chance" or "response-pattern" validity flag (PVANC §11 anticipates one). A dedicated detector would catch borderline non-compliance that still scrapes past the gates.
@@ -61,6 +66,9 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 
 The module is **scientifically sound for realistic observers** and **fails safe** on the
 dangerous cases (low vision flagged, guessing rejected, inadequate devices capped). The most
-important real-world gap is **W2 (undetected distance error)**; **W1** is a minor,
-spec-attributable artefact at the edge of plausibility. None of these were hidden or patched
-around — they are surfaced here with the negative cases that produced them.
+consequential gap, **W2 (distance error), is now fixed** via distance corroboration +
+confidence-driven scoring + explicit flagging, with the residual (no-second-reading) case made
+visible rather than silent. **W1** remains a minor, spec-attributable artefact at the edge of
+plausibility (a deliberate decision: fixing it would require changing the spec's slope prior).
+W3–W5 remain documented limitations. None of these were hidden or patched around — they are
+surfaced here with the negative cases that produced them.

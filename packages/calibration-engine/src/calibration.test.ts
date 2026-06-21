@@ -62,6 +62,25 @@ test('distance: rejects non-positive values for measured methods', () => {
   assert.throws(() => acquireDistance('user-reported', -1), RangeError);
 });
 
+test('distance: corroboration that agrees keeps high confidence', () => {
+  const d = acquireDistance('cord-measured', 2, { corroboration: { method: 'camera-estimated', valueMetres: 2.03 } });
+  assert.equal(d.corroboration!.agrees, true);
+  assert.equal(distanceConfidence(d), 'high');
+});
+
+test('distance: corroboration that disagrees widens uncertainty and lowers confidence (W2)', () => {
+  // Declared 2 m, but a second reading says 1.5 m → 0.5 m disagreement.
+  const d = acquireDistance('cord-measured', 2, { corroboration: { method: 'camera-estimated', valueMetres: 1.5 } });
+  assert.equal(d.corroboration!.agrees, false);
+  assert.ok(Math.abs(d.corroboration!.disagreementM - 0.5) < 1e-9);
+  assert.ok(d.uncertainty >= 0.5, `uncertainty should widen to the disagreement, got ${d.uncertainty}`);
+  assert.equal(distanceConfidence(d), 'low');
+});
+
+test('distance: rejects a non-positive corroborating value', () => {
+  assert.throws(() => acquireDistance('cord-measured', 2, { corroboration: { method: 'camera-estimated', valueMetres: 0 } }), RangeError);
+});
+
 test('geometry: degToPx matches the small-angle expectation and round-trips', () => {
   const device = resolveDeviceProfile({ deviceModel: 'iPhone16,1', deviceClass: 'smartphone', capturedAt: now });
   const distance = acquireDistance('cord-measured', 2);

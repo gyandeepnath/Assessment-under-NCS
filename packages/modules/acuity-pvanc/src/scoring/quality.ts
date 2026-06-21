@@ -8,7 +8,6 @@
  */
 
 import type { QualityModel } from '@vision-platform/core-contracts';
-import type { DistanceMethod } from '@vision-platform/core-contracts';
 
 /** Five components and weights from PVANC §9.3; bands from §9.3 thresholds. */
 export const PVANC_QUALITY_MODEL: QualityModel = {
@@ -26,7 +25,9 @@ export interface QualityInputs {
   posteriorSd: number;
   phase2Trials: number;
   outlierFraction: number; // fraction of trials flagged anticipatory/timeout
-  distanceMethod: DistanceMethod;
+  // Distance CONFIDENCE (not raw method): incorporates corroboration so a
+  // disagreeing/uncorroborated distance is not treated as "confirmed stable".
+  distanceConfidence: 'high' | 'moderate' | 'low';
   ambientAvailable: boolean;
   ambientLux: number | null;
 }
@@ -45,9 +46,10 @@ export function computeQualityEvidence(inp: QualityInputs): Record<string, numbe
   // Response consistency: 100·(1 − outlier fraction).
   const consistency = 100 * (1 - clamp01(inp.outlierFraction));
 
-  // Distance stability: measured = 100, estimated = 50, unknown = 0.
-  const distance =
-    inp.distanceMethod === 'cord-measured' ? 100 : inp.distanceMethod === 'unknown' ? 0 : 50;
+  // Distance stability (PVANC §9.3): confirmed = 100, estimated = 50, unknown = 0,
+  // mapped from confidence so corroboration disagreement (which lowers confidence)
+  // pulls this component down instead of trusting the declared method.
+  const distance = inp.distanceConfidence === 'high' ? 100 : inp.distanceConfidence === 'moderate' ? 50 : 0;
 
   // Environmental compliance: in range = 100, unknown = 50, out of range = 0.
   let environment: number;

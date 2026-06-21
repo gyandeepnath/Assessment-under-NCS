@@ -88,12 +88,26 @@ test('7. device-constraint: adequacy fails and caps quality (device-limited, not
   }
 });
 
-test('8. distance-error: produces a confident, UNDETECTED bias (weakness)', () => {
+test('8. distance-error: corroboration catches the wrong distance (W2 fixed)', () => {
   const a = runScenarioMany(scenario('distance-error'), RUNS);
-  // Subject closer than assumed ⇒ reported better than true.
-  assert.ok(a.estimateBias! <= -0.08, `expected better-than-true bias, got ${a.estimateBias}`);
-  // The weakness: distance-stability quality stays at maximum despite the wrong distance.
-  assert.equal(a.sample.distanceComponent, 100);
+  // The underlying bias still exists (we cannot un-bias a wrong-distance render)...
+  assert.ok(a.estimateBias! <= -0.08, `expected residual bias, got ${a.estimateBias}`);
+  // ...but it is no longer presented confidently: distance quality collapses, the
+  // disagreement is flagged, and the result is sent to retake.
+  for (const o of outcomes('distance-error')) {
+    assert.equal(o.distanceComponent, 0, 'distance quality should collapse on disagreement');
+    assert.ok(o.flags.includes('distance-corroboration-disagreement'), 'disagreement must be flagged');
+    assert.equal(o.permittedOutput, 'retake');
+  }
+});
+
+test('uncorroborated distance is surfaced (no longer silently trusted)', () => {
+  // A correct cord measurement still scores full distance quality, but the result
+  // now carries an explicit "taken on trust" info flag (W2 transparency).
+  for (const o of outcomes('noisy-attentive').filter((x) => x.status === 'completed')) {
+    assert.ok(o.flags.includes('distance-uncorroborated'), 'uncorroborated distance should be flagged');
+    assert.equal(o.distanceComponent, 100); // accurate cord measurement at 2 m
+  }
 });
 
 test('9. brightness-variation: small worse-than-true bias AND an auto-brightness flag', () => {

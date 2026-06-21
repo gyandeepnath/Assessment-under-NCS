@@ -21,7 +21,13 @@ const METHOD_UNCERTAINTY_M: Readonly<Record<DistanceMethod, number>> = {
 export interface AcquireDistanceOptions {
   /** Override the default uncertainty (e.g. a device-validated camera figure). */
   uncertaintyM?: number;
+  /** An independent second reading to corroborate the primary distance. */
+  corroboration?: { valueMetres: number; method: DistanceMethod };
 }
+
+/** Tolerance for agreement between two distance readings (the larger of these). */
+const CORROBORATION_ABS_TOL_M = 0.05;
+const CORROBORATION_REL_TOL = 0.04;
 
 export function acquireDistance(
   method: DistanceMethod,
@@ -31,11 +37,33 @@ export function acquireDistance(
   if (method !== 'unknown' && (!(valueMetres > 0) || !Number.isFinite(valueMetres))) {
     throw new RangeError(`viewing distance must be a positive finite number, got ${valueMetres}`);
   }
-  const uncertainty = opts.uncertaintyM ?? METHOD_UNCERTAINTY_M[method];
+  let uncertainty = opts.uncertaintyM ?? METHOD_UNCERTAINTY_M[method];
+
+  let corroboration: DistanceEstimate['corroboration'];
+  if (opts.corroboration) {
+    const cv = opts.corroboration.valueMetres;
+    if (!(cv > 0) || !Number.isFinite(cv)) {
+      throw new RangeError(`corroborating distance must be a positive finite number, got ${cv}`);
+    }
+    const disagreementM = Math.abs(valueMetres - cv);
+    const tol = Math.max(CORROBORATION_ABS_TOL_M, CORROBORATION_REL_TOL * valueMetres);
+    const agrees = disagreementM <= tol;
+    // Disagreement is evidence the primary distance is wrong: widen uncertainty to
+    // at least the disagreement so confidence and quality reflect it.
+    if (!agrees) uncertainty = Math.max(uncertainty, disagreementM);
+    corroboration = {
+      value: cv as Metres,
+      method: opts.corroboration.method,
+      disagreementM: disagreementM as Metres,
+      agrees,
+    };
+  }
+
   return {
     value: valueMetres as Metres,
     method,
     uncertainty: uncertainty as Metres,
+    ...(corroboration ? { corroboration } : {}),
   };
 }
 
