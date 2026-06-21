@@ -13,5 +13,14 @@
     "packages/validation",
     "packages/modules/*",
     "apps/*"
-  ]
+  ],
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^6.0.3"
+  }
 }

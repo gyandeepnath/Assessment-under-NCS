@@ -10,11 +10,11 @@
  * See docs/architecture/ARCHITECTURE.md §7.
  */
 
-import type { UUID, SemVer, ISO8601 } from './units';
-import type { StimulusSpec, TrialOutcome, ModuleResult, ChangeAssessment } from './module.contract';
-import type { ResponseEvent } from './platform.contract';
-import type { CalibrationProfile } from './calibration.contract';
-import type { QualityScore, QualityEvent } from './quality.contract';
+import type { UUID, SemVer, ISO8601 } from './units.ts';
+import type { StimulusSpec, TrialOutcome, ModuleResult, ChangeAssessment } from './module.contract.ts';
+import type { ResponseEvent } from './platform.contract.ts';
+import type { CalibrationProfile } from './calibration.contract.ts';
+import type { QualityScore, QualityEvent } from './quality.contract.ts';
 
 export type SchemaVersion = string;
 
@@ -54,8 +54,12 @@ export interface SessionRecord {
   changeAssessment?: ChangeAssessment;
 }
 
-/** Per-pseudonym longitudinal aggregate (PVANC §14.3). */
-export interface Baseline {
+/**
+ * Per-pseudonym longitudinal aggregate (PVANC §14.3). Distinct from the
+ * module-facing `Baseline` (module.contract), which is the comparison input to a
+ * single result; this is the persisted user-level record.
+ */
+export interface UserBaseline {
   userPseudonymId: string;
   establishedAt: ISO8601;
   estimate: number;
@@ -77,8 +81,8 @@ export interface SessionRepository {
 }
 
 export interface UserRepository {
-  baseline(userPseudonymId: string): Promise<Baseline | null>;
-  updateTrend(userPseudonymId: string, patch: Partial<Baseline>): Promise<void>;
+  baseline(userPseudonymId: string): Promise<UserBaseline | null>;
+  updateTrend(userPseudonymId: string, patch: Partial<UserBaseline>): Promise<void>;
 }
 
 export interface CalibrationRepository {

@@ -19,8 +19,8 @@ import type {
   Candela,
   WeberContrast,
   CieColour,
-} from './units';
-import type { DeviceClass, DeviceSignalKind, ResponseEvent } from './platform.contract';
+} from './units.ts';
+import type { DeviceClass, DeviceSignalKind, ResponseEvent } from './platform.contract.ts';
 
 /** Evidence-driven status that bounds what a module may claim (§6.4, §9.4). */
 export type ValidationStatus = 'research-only' | 'provisional' | 'validated';

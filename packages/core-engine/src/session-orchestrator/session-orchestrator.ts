@@ -1,7 +1,8 @@
 /**
- * Session Orchestrator (session lifecycle FSM)
+ * Session Orchestrator FSM (deferred)
  *
- * Skeleton placeholder — see docs/architecture/ARCHITECTURE.md §4.
- * No implementation yet. This file marks the component boundary only.
+ * Deferred: this integration component wires a concrete ModulePlugin to a host
+ * shell and is intentionally NOT implemented in the shared-measurement-core task
+ * (no modules or host shells exist yet). See docs/architecture/ARCHITECTURE.md §4.
  */
 export {};

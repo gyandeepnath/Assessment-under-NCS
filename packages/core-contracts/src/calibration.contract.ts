@@ -21,8 +21,8 @@ import type {
   Millimetres,
   Candela,
   ScaleRange,
-} from './units';
-import type { DeviceSignals } from './platform.contract';
+} from './units.ts';
+import type { DeviceSignals } from './platform.contract.ts';
 
 export type DistanceMethod =
   | 'cord-measured'

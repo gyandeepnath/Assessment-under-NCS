@@ -2,5 +2,9 @@
   "name": "@vision-platform/simulation",
   "version": "0.0.0",
   "private": true,
-  "description": "Skeleton package — see README.md and docs/architecture/ARCHITECTURE.md. No implementation yet."
+  "description": "Skeleton package — see README.md and docs/architecture/ARCHITECTURE.md. No implementation yet.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  }
 }

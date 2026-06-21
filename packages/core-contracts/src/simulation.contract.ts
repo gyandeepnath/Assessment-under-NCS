@@ -9,10 +9,10 @@
  * See docs/architecture/ARCHITECTURE.md §8.
  */
 
-import type { ModulePlugin, ObserverParams, VirtualObserver } from './module.contract';
-import type { CalibrationProfile } from './calibration.contract';
-import type { TrialRecord } from './storage.contract';
-import type { ScaleValue } from './units';
+import type { ModulePlugin, ObserverParams, VirtualObserver } from './module.contract.ts';
+import type { CalibrationProfile } from './calibration.contract.ts';
+import type { TrialRecord } from './storage.contract.ts';
+import type { ScaleValue } from './units.ts';
 
 export interface SimulationResult {
   recoveredEstimate: ScaleValue;

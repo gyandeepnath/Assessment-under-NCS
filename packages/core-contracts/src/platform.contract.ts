@@ -9,7 +9,7 @@
  * See docs/architecture/ARCHITECTURE.md §1, §10.1.
  */
 
-import type { Millis, Pixels, Candela, ISO8601 } from './units';
+import type { Millis, Pixels, Candela, ISO8601 } from './units.ts';
 
 export type DeviceClass = 'smartphone' | 'tablet' | 'desktop' | 'other';
 
@@ -26,6 +26,12 @@ export interface DeviceSignals {
   deviceModel?: string;
   deviceClass: DeviceClass;
   devicePixelRatio?: number;
+  // --- Optional screen metadata (used for device profiling / fallback). ---
+  screenWidthPx?: number; // physical pixel resolution, if reported
+  screenHeightPx?: number;
+  reportedPpi?: number; // pixels per inch, if the OS exposes it
+  reportedDiagonalInches?: number; // physical diagonal, if known
+  // --- Environment. ---
   ambientLux?: number;
   brightnessSetting?: number; // 0..100
   autoBrightness?: 'on' | 'off' | 'unknown';

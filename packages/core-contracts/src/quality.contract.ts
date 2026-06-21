@@ -9,7 +9,7 @@
  * See docs/architecture/ARCHITECTURE.md §6.
  */
 
-import type { ValidationStatus } from './module.contract';
+import type { ValidationStatus } from './module.contract.ts';
 
 export type QualityBand = 'high' | 'moderate' | 'low';
 

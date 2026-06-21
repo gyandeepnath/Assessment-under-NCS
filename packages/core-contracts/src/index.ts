@@ -8,11 +8,11 @@
  * See docs/architecture/ARCHITECTURE.md §3 and §10.
  */
 
-export * from './units';
-export * from './errors';
-export * from './platform.contract';
-export * from './module.contract';
-export * from './calibration.contract';
-export * from './quality.contract';
-export * from './storage.contract';
-export * from './simulation.contract';
+export * from './units.ts';
+export * from './errors.ts';
+export * from './platform.contract.ts';
+export * from './module.contract.ts';
+export * from './calibration.contract.ts';
+export * from './quality.contract.ts';
+export * from './storage.contract.ts';
+export * from './simulation.contract.ts';

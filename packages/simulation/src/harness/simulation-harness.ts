@@ -1,7 +1,7 @@
 /**
- * Headless simulation harness (Simulation Port)
+ * Headless simulation harness (deferred).
  *
- * Skeleton placeholder — see docs/architecture/ARCHITECTURE.md §8.
- * No implementation yet. This file marks the component boundary only.
+ * Wires a concrete ModulePlugin + virtual observer through the engine via the
+ * Simulation Port. Deferred until modules exist. See ARCHITECTURE §8.
  */
 export {};
