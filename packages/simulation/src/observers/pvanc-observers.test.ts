@@ -41,15 +41,19 @@ test('2. noisy-attentive: unbiased recovery at moderate quality (positive contro
   assert.ok(a.meanQuality! >= 60 && a.meanQuality! < 85, `quality ${a.meanQuality}`);
 });
 
-test('3. random-guesser: never gives false reassurance', () => {
-  const os = outcomes('random-guesser');
+test('3. random-guesser: rejected, and the validity detector flags it (W5)', () => {
+  const os = outcomes('random-guesser', 60);
   const inconclusive = os.filter((o) => o.status === 'inconclusive').length / os.length;
   assert.ok(inconclusive > 0.8, `inconclusive fraction ${inconclusive}`);
-  // The failure mode: a confident, normal-looking acuity. Must never happen.
+  // Never a confident "normal vision" reassurance.
   for (const o of os) {
     const falseReassurance = o.category === 'within_expected' && (o.quality ?? 0) >= 60;
     assert.equal(falseReassurance, false, `false reassurance in run: ${JSON.stringify(o)}`);
   }
+  // The W5 detector is active: at least some guessers are explicitly flagged
+  // invalid (the rest are caught by the floor/completeness gates → inconclusive).
+  const flagged = os.filter((o) => o.flags.includes('invalid-response-pattern')).length;
+  assert.ok(flagged >= 1, `expected the validity detector to flag some guessers, got ${flagged}`);
 });
 
 test('4. fatigued: degrades (not better than true), flags timeouts, raises inconclusive rate', () => {
@@ -74,6 +78,10 @@ test('6. low-vision: reports reduced acuity; never a false negative', () => {
   assert.ok(mean >= 0.6, `mean ${mean}`);
   for (const o of completed) {
     assert.notEqual(o.category, 'within_expected', `false negative: ${JSON.stringify(o)}`);
+  }
+  // W5 safety regression: genuine low vision must NEVER be mislabelled as guessing.
+  for (const o of outcomes('low-vision', 50)) {
+    assert.equal(o.flags.includes('invalid-response-pattern'), false, `low vision wrongly flagged invalid: ${JSON.stringify(o)}`);
   }
 });
 

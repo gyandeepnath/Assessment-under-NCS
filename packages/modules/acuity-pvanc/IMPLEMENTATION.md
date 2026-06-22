@@ -52,6 +52,7 @@ the module before changing the module.
 - Too few valid Phase 2 trials → completeness gate → **inconclusive** (no category).
 - Coarse display / short distance → adequacy gate fails → **quality capped** at 70; and when the estimate is as fine as or finer than the display can render, the result is marked **device-limited** (category suppressed to `inconclusive`, `device-limited-result` flag, retake) so it is never read as reduced *eye* acuity. Genuine low vision on an adequate device keeps its category.
 - Wrong-but-confident viewing distance → optional **distance corroboration**; disagreement widens uncertainty, collapses the distance-stability component, flags `distance-corroboration-disagreement`, and drops to retake; an uncorroborated distance carries a `distance-uncorroborated` info flag.
+- Guessing / non-compliance → **response-validity detector**: `rapid-guessing` for runs of anticipatory responses, and `invalid-response-pattern` when performance is at chance both overall AND on the largest optotypes (conjunctive, so genuine low vision is never flagged) → suppresses category, forces retake.
 - User-reported vs measured distance → lower distance-stability component.
 - Floating-point grid drift in the staircase → rounded to the optotype grid.
 

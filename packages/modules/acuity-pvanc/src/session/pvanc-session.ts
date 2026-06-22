@@ -43,7 +43,10 @@ import {
   scoreQuality,
   claimGate,
   checkCompleteness,
+  assessResponseValidity,
   type PreflightEnv,
+  type ValidityVerdict,
+  type ValidityTrial,
 } from '@vision-platform/quality-engine';
 import {
   buildSessionExport,
@@ -208,15 +211,31 @@ export class PvancSession {
     });
     const inconclusive = !completeness.complete || refine.floored;
 
+    // Response-validity (W5): catches guessing/non-compliance that scrapes past the
+    // floor and completeness gates. Only assessed when not floored — a floored
+    // session reflects genuine inability (e.g. severe low vision), not guessing.
+    const validity = assessResponseValidity(this.buildValidityTrials(), { chanceRate: 0.25 });
+
     return this.finish(inconclusive ? 'inconclusive' : 'completed', calibration, flags, {
       terminalLogMAR: refine.estimate,
       posteriorSd: refine.floored ? 1.0 : refine.sd,
       phase2Valid: refine.outcomes,
       outlierFraction: refine.outlierFraction,
       inconclusive,
+      validity,
       ...(completeness.complete ? {} : { reason: completeness.reason }),
       ...(refine.floored ? { reason: 'floor reached during refinement' } : {}),
     });
+  }
+
+  /** Map logged trials to the validity detector's input. */
+  private buildValidityTrials(): ValidityTrial[] {
+    return this.log.all().map((t) => ({
+      intensity: t.stimulus.intensity as unknown as number,
+      correct: t.outcome.correct,
+      usable: t.outcome.usableForThreshold,
+      latencyMs: t.response.latencyMs,
+    }));
   }
 
   // --- Phases ---------------------------------------------------------------
@@ -459,9 +478,12 @@ export class PvancSession {
       phase2Valid: TrialOutcome[];
       outlierFraction: number;
       inconclusive: boolean;
+      validity?: ValidityVerdict;
       reason?: string;
     },
   ): PvancSessionResult {
+    if (args.validity) flags.push(...args.validity.flags);
+
     // W4: a result is "device-limited" when the device could not render detail as
     // fine as the measured threshold (estimate at/below the display's finest
     // renderable size). Such a result must NOT be presented as a vision category —
@@ -477,11 +499,29 @@ export class PvancSession {
       });
     }
 
-    const inconclusive = args.inconclusive || deviceLimited;
-    const effectiveStatus: SessionStatus = deviceLimited ? 'inconclusive' : status;
+    // W5: an invalid response pattern (at-chance on easy optotypes) means the
+    // result cannot be trusted as a measure of vision.
+    const invalidPattern = args.validity?.valid === false;
+
+    const inconclusive = args.inconclusive || deviceLimited || invalidPattern;
+    const effectiveStatus: SessionStatus = deviceLimited || invalidPattern ? 'inconclusive' : status;
     const effectiveReason = deviceLimited
       ? 'result limited by display pixel density (device-limited, not a measure of vision)'
-      : args.reason;
+      : invalidPattern
+        ? (args.validity?.reason ?? 'invalid response pattern')
+        : args.reason;
+
+    const extraLimitations: string[] = [];
+    if (deviceLimited) {
+      extraLimitations.push(
+        'Display could not render the detail needed; this result is device-limited, not a measure of your vision. Retest on a higher-resolution screen or at a greater distance.',
+      );
+    }
+    if (invalidPattern) {
+      extraLimitations.push(
+        'Responses did not follow a consistent pattern (at-chance accuracy on the easiest optotypes); this can indicate guessing or difficulty understanding the task. Please retry, following the on-screen instructions.',
+      );
+    }
 
     const result = deriveResult(
       {
@@ -492,9 +532,7 @@ export class PvancSession {
       {
         inconclusive,
         ...expectedMeanOpt(this.cfg.age),
-        ...(deviceLimited
-          ? { extraLimitations: ['Display could not render the detail needed; this result is device-limited, not a measure of your vision. Retest on a higher-resolution screen or at a greater distance.'] }
-          : {}),
+        ...(extraLimitations.length > 0 ? { extraLimitations } : {}),
       },
     );
 

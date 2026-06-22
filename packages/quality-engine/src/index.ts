@@ -26,3 +26,9 @@ export {
 export { scoreQuality, bandFor, type ScoreOptions } from './scoring/scoring.ts';
 export { claimGate } from './claim-gate/claim-gate.ts';
 export { checkCompleteness } from './completeness/completeness.ts';
+export {
+  assessResponseValidity,
+  type ValidityTrial,
+  type ValidityConfig,
+  type ValidityVerdict,
+} from './validity/response-validity.ts';
