@@ -23,6 +23,8 @@ export interface DeriveOptions {
   expectedMeanLogMAR?: number;
   /** Mark the result inconclusive (e.g. floored or failed completeness). */
   inconclusive?: boolean;
+  /** Additional, context-specific limitations to append (e.g. device-limited). */
+  extraLimitations?: string[];
 }
 
 export function deriveResult(input: ResultInput, opts: DeriveOptions = {}): ModuleResult {
@@ -42,7 +44,7 @@ export function deriveResult(input: ResultInput, opts: DeriveOptions = {}): Modu
     ...(ci68 ? { credibleInterval68: ci68 } : {}),
     ...(ci95 ? { credibleInterval95: ci95 } : {}),
     category,
-    limitations: [...PVANC_LIMITATIONS],
+    limitations: [...PVANC_LIMITATIONS, ...(opts.extraLimitations ?? [])],
   };
 }
 

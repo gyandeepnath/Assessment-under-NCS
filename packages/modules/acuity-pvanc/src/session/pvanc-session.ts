@@ -124,6 +124,7 @@ export interface PvancSessionResult {
 
 const FLOOR_CONSECUTIVE_ERRORS = 5; // PVANC §6.2 floor detection
 const MIN_VALID_PHASE2_TRIALS = 15; // PVANC §11.3
+const DEVICE_LIMIT_MARGIN = 0.1; // logMAR margin for flagging a device-limited result (one optotype step)
 
 export class PvancSession {
   private readonly cfg: PvancSessionConfig;
@@ -461,6 +462,27 @@ export class PvancSession {
       reason?: string;
     },
   ): PvancSessionResult {
+    // W4: a result is "device-limited" when the device could not render detail as
+    // fine as the measured threshold (estimate at/below the display's finest
+    // renderable size). Such a result must NOT be presented as a vision category —
+    // it reflects the screen, not the eye. The raw estimate is still reported.
+    const deviceLimited =
+      !calibration.adequacy.passes &&
+      args.terminalLogMAR <= calibration.adequacy.maxMeasurable + DEVICE_LIMIT_MARGIN;
+    if (deviceLimited) {
+      flags.push({
+        code: 'device-limited-result',
+        severity: 'degrade',
+        message: `display cannot render finer than ${calibration.adequacy.maxMeasurable} logMAR; the estimate is limited by the device, not the eye`,
+      });
+    }
+
+    const inconclusive = args.inconclusive || deviceLimited;
+    const effectiveStatus: SessionStatus = deviceLimited ? 'inconclusive' : status;
+    const effectiveReason = deviceLimited
+      ? 'result limited by display pixel density (device-limited, not a measure of vision)'
+      : args.reason;
+
     const result = deriveResult(
       {
         terminalEstimate: asScale(args.terminalLogMAR),
@@ -468,8 +490,11 @@ export class PvancSession {
         trials: args.phase2Valid,
       },
       {
-        inconclusive: args.inconclusive,
+        inconclusive,
         ...expectedMeanOpt(this.cfg.age),
+        ...(deviceLimited
+          ? { extraLimitations: ['Display could not render the detail needed; this result is device-limited, not a measure of your vision. Retest on a higher-resolution screen or at a greater distance.'] }
+          : {}),
       },
     );
 
@@ -486,7 +511,7 @@ export class PvancSession {
       ...(calibration.adequacy.qualityCap !== undefined ? { cap: calibration.adequacy.qualityCap } : {}),
     });
 
-    const permittedOutput: PermittedOutput = args.inconclusive
+    const permittedOutput: PermittedOutput = inconclusive
       ? 'retake'
       : claimGate.permit(quality.band, PVANC_MANIFEST.validationStatus);
 
@@ -498,8 +523,8 @@ export class PvancSession {
       sessionId: this.cfg.sessionId,
       userPseudonymId: this.cfg.userPseudonymId ?? 'anonymous',
       startedAt: this.cfg.deviceSignals.capturedAt,
-      status,
-      ...(args.reason ? { reason: args.reason } : {}),
+      status: effectiveStatus,
+      ...(effectiveReason ? { reason: effectiveReason } : {}),
       useCase: this.cfg.useCase ?? 'screening',
       procedureId: 'pvanc-hybrid',
       result,
@@ -507,7 +532,7 @@ export class PvancSession {
 
     const qc: QcMetadata = {
       blocked: false,
-      completeness: { complete: status === 'completed', ...(args.reason ? { reason: args.reason } : {}) },
+      completeness: { complete: effectiveStatus === 'completed', ...(effectiveReason ? { reason: effectiveReason } : {}) },
       preflightFlags: this.preflightFlags,
       events: trials.flatMap((t) => t.qualityEvents),
       flagCounts: tallyFlags(quality.flags),
@@ -526,8 +551,8 @@ export class PvancSession {
     });
 
     return {
-      status,
-      ...(args.reason ? { reason: args.reason } : {}),
+      status: effectiveStatus,
+      ...(effectiveReason ? { reason: effectiveReason } : {}),
       result,
       quality,
       permittedOutput,

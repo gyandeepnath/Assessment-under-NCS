@@ -20,7 +20,7 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 | 4 | Fatigued (0.3 → lapsing) | 19 completed / 21 inconc. | 0.52 | +0.22 | 0.27 | 67 | timeout flags |
 | 5 | Learning (0.4 → 0.2) | 38 completed | 0.25 | −0.05* | 0.14 | 70 | in-bracket |
 | 6 | Low-vision (true 0.8) | 32 completed | 0.74 | −0.06 | 0.11 | 68 | below-expected |
-| 7 | Device-constraint (coarse @0.4 m) | 40 completed | 0.55 | n/a | — | 70 | **adequacy fail, cap 70** |
+| 7 | Device-constraint (coarse @0.4 m) | 40 inconclusive | 0.55 (raw) | n/a | — | ≤70 | **device-limited → category suppressed, retake** |
 | 8 | Distance-error (1.5 m vs 2 m, corroborated) | 39 completed | 0.14 | **−0.16** | 0.21 | 55 | **distance Q → 0, retake, flagged** |
 | 9 | Brightness-variation (auto-bright) | 38 completed | 0.36 | +0.06 | 0.14 | 70 | auto-brightness flag |
 | 10 | Calibration-drift (silent) | 39 completed | 0.32 | +0.02 | 0.13 | 70 | no signal |
@@ -35,7 +35,7 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 4. **Fatigued** — *Expected:* worse, not better; signs of degradation. *Output:* bias **+0.22** (worse), 52% inconclusive, timeout flags fire, quality not high. *Failure:* better-than-true or full quality — not seen. **Verdict: PASS**.
 5. **Learning-effect** — *Expected:* estimate between the early/late thresholds. *Output:* mean 0.25 ∈ [0.2, 0.4]. *Failure:* outside the bracket / instability — not seen. **Verdict: PASS** (and the spec's practice-trial / 2nd-session-baseline guidance applies).
 6. **Low-vision** — *Expected:* reduced acuity, below-expected. *Output:* mean 0.74, **every** completed run below-expected. *Failure:* a within-expected false negative — **never occurred**. **Verdict: PASS** (the safety-critical case).
-7. **Device-constraint** — *Expected:* device-limited result, flagged. *Output:* **adequacy fails, quality capped at 70**, estimate pinned near the device floor (~0.55). *Failure:* adequacy passes / impossibly-good acuity — not seen. **Verdict: PASS, but see W4** (the point estimate alone looks like reduced *eye* acuity; the cap + `maxMeasurable` metadata are what disambiguate it).
+7. **Device-constraint** — *Expected:* device-limited result, flagged, not read as eye acuity. *Output:* **adequacy fails; the category is suppressed to `inconclusive`, a `device-limited-result` flag fires, and the run goes to retake** (the raw estimate ~0.55 is still recorded). *Failure:* a vision category presented as if it were the eye — **no longer occurs**. **Verdict: WEAKNESS FIXED (W4).**
 8. **Distance-error** — *Expected:* a bias, signalled. *Output:* the −0.16 bias remains (a wrong-distance render cannot be un-biased), **but it is no longer confident**: with a corroborating reading the disagreement is detected — distance-stability quality collapses to 0, a `distance-corroboration-disagreement` flag fires, and the result drops to **retake**. *Failure:* confident unflagged bias — **no longer occurs**. **Verdict: WEAKNESS FIXED (W2 — see below).**
 9. **Brightness-variation** — *Expected:* small worse bias + a flag. *Output:* bias +0.06 **and** an `auto-brightness` flag on every run. *Failure:* no flag / large bias — not seen. **Verdict: PASS**.
 10. **Calibration-drift** — *Expected:* small bias, undetectable in one session. *Output:* bias +0.02, no in-session signal. *Failure:* large bias or over-claiming detection — not seen. **Verdict: PASS as a documented limitation (W3).**
@@ -59,16 +59,17 @@ modified**; where a spec choice causes a bias, it is reported, not patched.
 
   *Result:* the simulation's distance-error observer now collapses distance quality to 0 and is sent to retake (was: confident, Q 100). **Residual limitation:** without a second reading the bias is still fundamentally unmeasurable — but it is no longer *unflagged* (the uncorroborated info flag makes the latent risk visible). Covered by tests in `pvanc-observers.test.ts` (#8) and `calibration.test.ts`.
 - **W3 — Single-session calibration drift is invisible.** By design (PVANC §10.4 puts drift detection in cross-session tracking, which v1 does not implement), a silently aged display produces a small undetected bias. Correctly **not** over-claimed; flagged here as a known gap until longitudinal tracking lands.
-- **W4 — Device-limited results can read like reduced eye acuity.** On an inadequate device the point estimate (~0.55) looks like below-expected vision; only the adequacy **cap (70)** and the `maxMeasurable` calibration metadata reveal it is the *device*, not the eye. Consumers/clinicians must read the calibration/QC metadata, not the estimate alone — the structured export (W: ensure it surfaces) makes this possible.
+- **W4 — Device-limited results read like reduced eye acuity — FIXED.** *Original:* on an inadequate device the point estimate (~0.55) looked like below-expected vision; only the passive adequacy cap and `maxMeasurable` metadata disambiguated it. *Fix (spec-compliant — extends §10.3's "warn + cap" and serves §16's misuse-prevention):* when the device cannot render detail as fine as the measured threshold (estimate ≤ `maxMeasurable` + one optotype step, and adequacy failed), the module marks the result **device-limited** — the screening **category is suppressed to `inconclusive`**, a **`device-limited-result`** flag fires, a plain-language limitation is attached, and the result goes to **retake**. The raw estimate is still recorded (not hidden). A guard prevents over-triggering: a genuine low-vision result on an *adequate* device keeps its `below_expected` category (verified by test). Covered in `pvanc-observers.test.ts` (#7) and `pvanc-session.test.ts`.
 - **W5 — No explicit non-compliance/guessing detector.** Guessing and fatigue are caught **indirectly** via the floor and completeness gates (which works well here), but there is no first-class "below-chance" or "response-pattern" validity flag (PVANC §11 anticipates one). A dedicated detector would catch borderline non-compliance that still scrapes past the gates.
 
 ## Bottom line
 
 The module is **scientifically sound for realistic observers** and **fails safe** on the
-dangerous cases (low vision flagged, guessing rejected, inadequate devices capped). The most
-consequential gap, **W2 (distance error), is now fixed** via distance corroboration +
-confidence-driven scoring + explicit flagging, with the residual (no-second-reading) case made
-visible rather than silent. **W1** remains a minor, spec-attributable artefact at the edge of
-plausibility (a deliberate decision: fixing it would require changing the spec's slope prior).
-W3–W5 remain documented limitations. None of these were hidden or patched around — they are
-surfaced here with the negative cases that produced them.
+dangerous cases (low vision flagged, guessing rejected, inadequate devices now marked
+device-limited rather than mislabelled). **W2 (distance error)** and **W4 (device-limited
+results)** are now fixed — both spec-compliant, both with the raw data preserved and the
+limitation made explicit rather than hidden. **W1** remains a minor, spec-attributable artefact
+at the edge of plausibility (a deliberate decision: fixing it would require changing the spec's
+slope prior). **W3** (single-session drift) needs cross-session tracking and **W5** (a
+first-class non-compliance detector) remain open; both are documented, and W5's risk is already
+mitigated indirectly by the floor/completeness gates.

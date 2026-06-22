@@ -50,7 +50,8 @@ the module before changing the module.
 - Cannot see the largest optotype → **floor → inconclusive**, `retake`.
 - Responses beyond the 5 s window → recorded as errors, flagged, → **inconclusive**.
 - Too few valid Phase 2 trials → completeness gate → **inconclusive** (no category).
-- Coarse display / short distance → adequacy gate fails → **quality capped** at 70.
+- Coarse display / short distance → adequacy gate fails → **quality capped** at 70; and when the estimate is as fine as or finer than the display can render, the result is marked **device-limited** (category suppressed to `inconclusive`, `device-limited-result` flag, retake) so it is never read as reduced *eye* acuity. Genuine low vision on an adequate device keeps its category.
+- Wrong-but-confident viewing distance → optional **distance corroboration**; disagreement widens uncertainty, collapses the distance-stability component, flags `distance-corroboration-disagreement`, and drops to retake; an uncorroborated distance carries a `distance-uncorroborated` info flag.
 - User-reported vs measured distance → lower distance-stability component.
 - Floating-point grid drift in the staircase → rounded to the optotype grid.
 

@@ -198,6 +198,22 @@ test('coarse display fails the adequacy gate and caps quality', () => {
   assert.equal(r.calibrationProfile.adequacy.passes, false);
   assert.equal(r.calibrationProfile.adequacy.qualityCap, 70);
   assert.ok(r.quality!.value <= 70);
+  // W4: a device-limited result must not present a vision category.
+  assert.equal(r.status, 'inconclusive');
+  assert.equal(r.result!.category, 'inconclusive');
+  assert.ok(r.quality!.flags.some((f) => f.code === 'device-limited-result'));
+  assert.equal(r.permittedOutput, 'retake');
+  // The raw estimate is still recorded (not hidden).
+  assert.equal(typeof (r.result!.estimate as unknown as number), 'number');
+  assert.ok(r.result!.limitations.some((l) => /device-limited/i.test(l)));
+});
+
+test('a genuine low-vision result on an ADEQUATE device keeps its vision category', () => {
+  // Ensures W4 does not over-trigger: on a good device, below-expected stays below-expected.
+  const r = new PvancSession(baseConfig()).run(makePvancResponder({ trueLogMAR: 0.8 }, createRng('lv')));
+  assert.equal(r.calibrationProfile.adequacy.passes, true);
+  assert.equal(r.status, 'completed');
+  assert.equal(r.result!.category, 'below_expected');
 });
 
 test('user-reported distance lowers the distance-stability component vs measured', () => {

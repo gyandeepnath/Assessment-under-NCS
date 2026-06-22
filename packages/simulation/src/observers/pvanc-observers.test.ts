@@ -77,14 +77,19 @@ test('6. low-vision: reports reduced acuity; never a false negative', () => {
   }
 });
 
-test('7. device-constraint: adequacy fails and caps quality (device-limited, not eye-limited)', () => {
+test('7. device-constraint: result is marked device-limited, not a vision category (W4)', () => {
   const os = outcomes('device-constraint');
   for (const o of os) {
     assert.equal(o.adequacyPasses, false, 'adequacy should fail on a coarse device');
     assert.equal(o.qualityCap, 70, 'quality should be capped');
-    assert.ok((o.quality ?? 100) <= 70, `quality not capped: ${o.quality}`);
-    // Must not report an impossibly good acuity below what the device can render.
-    if (o.estimate !== null) assert.ok(o.estimate > 0.2, `implausibly good on coarse device: ${o.estimate}`);
+    // The result must NOT read as reduced eye acuity: category is suppressed and
+    // a device-limited flag fires; the run is inconclusive → retake.
+    assert.equal(o.status, 'inconclusive');
+    assert.equal(o.category, 'inconclusive', 'must not assign a vision category');
+    assert.ok(o.flags.includes('device-limited-result'), 'must flag device-limited');
+    assert.equal(o.permittedOutput, 'retake');
+    // The raw estimate is still present (not hidden).
+    assert.notEqual(o.estimate, null);
   }
 });
 

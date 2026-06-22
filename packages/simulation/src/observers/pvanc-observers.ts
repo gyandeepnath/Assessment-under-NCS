@@ -193,8 +193,8 @@ export const SCENARIOS: ObserverScenario[] = [
     id: 'device-constraint',
     name: '7. Device-constraint observer',
     expectedBehavior: `Sharp-eyed subject (true 0.0) on a coarse display that cannot render finer than ~${COARSE_LIMIT.toFixed(2)} logMAR at 0.4 m; optotypes below that size are pixelated/unresolvable, so performance drops to chance.`,
-    expectedOutput: 'Adequacy gate fails and caps quality at 70; the estimate is limited near the device limit (≈ device floor), and the cap + maxMeasurable signal the result is device-limited, not eye-limited.',
-    failureLooksLike: 'Adequacy passes / no quality cap while reporting a poor acuity as if it were the eye, or an impossibly good acuity below what the device can render.',
+    expectedOutput: 'Adequacy gate fails; the result is marked DEVICE-LIMITED — category suppressed to inconclusive, a device-limited-result flag fires, and the run goes to retake — so it never reads as reduced eye acuity. The raw estimate is still recorded.',
+    failureLooksLike: 'A vision category (e.g. below-expected) presented as if it were the eye, or the device limitation hidden.',
     groundTruthLogMAR: null, // the eye\'s true acuity is unmeasurable on this device
     configOverrides: { deviceSignals: COARSE_DESKTOP_SIGNALS, distance: { method: 'cord-measured', valueMetres: 0.4 } },
     makeResponder: (rng) =>
